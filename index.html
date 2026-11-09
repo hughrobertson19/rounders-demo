@@ -18,7 +18,7 @@
     --line: #c9d3df;
     --tint: #f4f6f9;
     --gold: #b8791f;
-    --star-off: #6b7f96;
+    --field-edge: #6b7f96;
   }
   * { box-sizing: border-box; }
   html { -webkit-text-size-adjust: 100%; }
@@ -71,29 +71,7 @@
   p { margin: 0; line-height: 1.45; color: var(--ink); }
   .lead { font-size: 17px; }
   .small { font-size: 15px; }
-  .stars { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
-  .star-btn {
-    aspect-ratio: 1;
-    min-height: 56px;
-    padding: 0;
-    background: var(--tint);
-    border: 2px solid var(--line);
-    border-radius: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .star-btn svg { width: 60%; height: 60%; }
-  .star-btn polygon { fill: #ffffff; stroke: var(--star-off); stroke-width: 1.6; stroke-linejoin: round; }
-  .star-btn.on { border-color: var(--gold); }
-  .star-btn.on polygon { fill: var(--gold); stroke: #8c602a; }
-  .scale { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
-  .summary { display: flex; align-items: center; gap: 4px; font-size: 14px; color: var(--muted); }
-  .summary svg { width: 20px; height: 20px; }
-  .summary polygon { stroke: #8c602a; stroke-width: 1.6; stroke-linejoin: round; fill: #ffffff; }
-  .summary polygon.on { fill: var(--gold); }
-  .summary span { margin-left: 8px; }
+  .section-gap { margin-top: 10px; }
   .tiles { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
   .tile {
     display: flex;
@@ -143,7 +121,7 @@
     font: inherit;
     font-size: 16px;
     color: var(--navy);
-    border: 2px solid var(--star-off);
+    border: 2px solid var(--field-edge);
     border-radius: 10px;
     background: #ffffff;
   }
@@ -172,7 +150,7 @@
     font-size: 12px;
     color: var(--muted);
   }
-  footer .link-btn { min-height: 44px; font-size: 12px; }
+  footer .link-btn { min-height: 44px; font-size: 12px; white-space: nowrap; }
   button:focus-visible, a:focus-visible, textarea:focus-visible, input:focus-visible {
     outline: 3px solid var(--bronze);
     outline-offset: 2px;
@@ -188,24 +166,23 @@
   </div>
 
   <main>
-    <section class="screen" id="rate">
-      <h1 tabindex="-1">How was your visit?</h1>
-      <p class="lead">Tap a star. It takes about ten seconds.</p>
-      <div class="stars" id="starRow"></div>
-      <div class="scale"><span>Not great</span><span>Loved it</span></div>
-    </section>
+    <!-- One screen for every guest. No rating step, so nothing on this page branches on how a
+         guest feels. Routing only happy guests to the public review sites is review gating:
+         see the FTC Endorsement Guides (16 CFR 255) and Google's own review policy. 16 CFR 465
+         covers the related ground of fake reviews, sentiment-tied incentives and suppression. -->
+    <section class="screen" id="home">
+      <h1 tabindex="-1">How's your visit?</h1>
+      <p class="lead">Anything we can fix right now?</p>
+      <button type="button" class="primary" id="goPrivate">Tell the manager</button>
 
-    <section class="screen" id="choose" hidden>
-      <div class="summary" id="summary"></div>
-      <h2 tabindex="-1">Thanks! Tell people about your visit.</h2>
-      <p class="small">Pick wherever you like to review. Tip: say what you ate and who looked after you.</p>
+      <h2 class="section-gap">Enjoyed it? Leave a review</h2>
       <div class="tiles" id="tiles"></div>
-      <button type="button" class="link-btn" id="goPrivate">Prefer to tell the manager privately?</button>
     </section>
 
     <section class="screen" id="private" hidden>
       <h2 tabindex="-1">Tell the manager</h2>
       <p class="small">This goes straight to our team and is not posted anywhere.</p>
+      <p class="small"><strong>Demo. Nothing is sent.</strong></p>
       <div>
         <label for="note">What would you like us to know?</label>
         <textarea id="note" rows="5"></textarea>
@@ -215,7 +192,7 @@
         <input id="email" type="email" autocomplete="email">
       </div>
       <button type="button" class="primary" id="sendPrivate">Send to the manager</button>
-      <button type="button" class="link-btn" id="backToChoose">Back</button>
+      <button type="button" class="link-btn" id="backHome">Back</button>
     </section>
 
     <section class="screen" id="thanks" hidden>
@@ -260,7 +237,8 @@
         href: "https://search.google.com/local/writereview?placeid=ChIJKUl_2eDTD4gRJRHO_ySpazA"
       },
       {
-        // Yelp discourages businesses from asking for reviews. Keep this off in the live build unless the owner opts in.
+        // Yelp discourages businesses from asking for reviews, so this tile is the owner's call.
+        // Owner has opted in: shown to every guest, same as the others. Set enabled: false to remove it.
         name: "Yelp",
         glyph: { viewBox: "0 0 24 24", paths: [{ d: ICONS.yelp, fill: "#FF1A1A" }] },
         enabled: true,
@@ -275,63 +253,16 @@
     ]
   };
 
-  const STAR_POINTS = "12,2 15,9 22,9.3 16.5,14 18.2,21 12,17.3 5.8,21 7.5,14 2,9.3 9,9";
   const NS = "http://www.w3.org/2000/svg";
-  const names = ["rate", "choose", "private", "thanks"];
+  const names = ["home", "private", "thanks"];
   const el = (id) => document.getElementById(id);
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let stars = 0;
 
   function show(name) {
     names.forEach((n) => { el(n).hidden = n !== name; });
-    el("restart").hidden = name === "rate";
+    el("restart").hidden = name === "home";
     const heading = el(name).querySelector("h1, h2");
     if (heading) heading.focus({ preventScroll: true });
     window.scrollTo(0, 0);
-  }
-
-  function starSvg() {
-    const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("aria-hidden", "true");
-    const poly = document.createElementNS(NS, "polygon");
-    poly.setAttribute("points", STAR_POINTS);
-    svg.appendChild(poly);
-    return svg;
-  }
-
-  function buildStars() {
-    const row = el("starRow");
-    row.textContent = "";
-    for (let n = 1; n <= 5; n++) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "star-btn";
-      b.setAttribute("aria-label", n + (n === 1 ? " star" : " stars"));
-      b.appendChild(starSvg());
-      b.addEventListener("click", () => pickStar(n));
-      row.appendChild(b);
-    }
-  }
-
-  function pickStar(n) {
-    stars = n;
-    Array.from(el("starRow").children).forEach((b, i) => b.classList.toggle("on", i < n));
-    renderSummary();
-    setTimeout(() => show("choose"), reduceMotion ? 0 : 260);
-  }
-
-  function renderSummary() {
-    const box = el("summary");
-    box.textContent = "";
-    for (let n = 1; n <= 5; n++) {
-      const svg = starSvg();
-      if (n <= stars) svg.firstChild.setAttribute("class", "on");
-      box.appendChild(svg);
-    }
-    const label = document.createElement("span");
-    label.textContent = stars + (stars === 1 ? " star" : " stars");
-    box.appendChild(label);
   }
 
   function buildTiles() {
@@ -384,20 +315,18 @@
   }
 
   function restart() {
-    stars = 0;
     el("note").value = "";
     el("email").value = "";
-    buildStars();
-    show("rate");
+    show("home");
   }
 
   const google = CONFIG.platforms.find((p) => p.name === "Google");
+  // Set unconditionally: the thanks screen offers Google to every guest, whatever they wrote.
   if (google) el("googleLink").href = google.href;
   el("address").textContent = CONFIG.address;
-  buildStars();
   buildTiles();
   el("goPrivate").addEventListener("click", () => show("private"));
-  el("backToChoose").addEventListener("click", () => show("choose"));
+  el("backHome").addEventListener("click", () => show("home"));
   el("sendPrivate").addEventListener("click", () => show("thanks"));
   el("restart").addEventListener("click", restart);
 </script>
